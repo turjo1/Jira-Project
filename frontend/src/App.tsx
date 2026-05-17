@@ -17,43 +17,10 @@ function App() {
 
   useEffect(() => {
     const boot = async () => {
-      // 1. Restore token from localStorage (no-op if absent/expired)
-      initializeAuth();
-
-      // 2. Check for OAuth2 callback params in URL
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      const state = params.get('state');
-
-      if (code && state) {
-        setLoading(true);
-        try {
-          const { access_token } = await apiClient.completeOAuth(code, state);
-
-          if (!access_token) throw new Error('No access token received from backend');
-
-          // Decode JWT payload to extract sub (user id)
-          let userId = 'unknown';
-          try {
-            const raw = access_token.split('.')[1];
-            // Pad base64 to a multiple of 4
-            const padded = raw + '='.repeat((4 - (raw.length % 4)) % 4);
-            const payload = JSON.parse(atob(padded));
-            userId = payload.sub ?? 'unknown';
-          } catch {
-            // Non-fatal: fall back to 'unknown'
-          }
-
-          login(access_token, userId);
-          // Remove code/state from URL so refreshing doesn't re-submit
-          window.history.replaceState({}, document.title, '/');
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Authentication failed';
-          setCallbackError(msg);
-        } finally {
-          setLoading(false);
-        }
-      }
+      // DEV MODE: Auto-login for development/testing
+      // TODO: Remove this and implement proper Google OAuth when ready
+      const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIn0.test';
+      login(testToken, 'test-user-123');
 
       setIsInitializing(false);
     };

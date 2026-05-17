@@ -27,19 +27,19 @@ class Settings(BaseSettings):
         default="dev-insecure-32byte-key-change!!"
     )
 
-    jira_client_id: str = Field(default="")
-    jira_client_secret: str = Field(default="")
-    jira_redirect_uri: str = Field(
+    google_client_id: str = Field(default="")
+    google_client_secret: str = Field(default="")
+    google_redirect_uri: str = Field(
         default="http://localhost:8000/auth/callback"
     )
-    jira_oauth_authorize_url: str = Field(
-        default="https://auth.atlassian.com/authorize"
+    google_oauth_authorize_url: str = Field(
+        default="https://accounts.google.com/o/oauth2/v2/auth"
     )
-    jira_oauth_token_url: str = Field(
-        default="https://auth.atlassian.com/oauth/token"
+    google_oauth_token_url: str = Field(
+        default="https://oauth2.googleapis.com/token"
     )
-    jira_accessible_resources_url: str = Field(
-        default="https://api.atlassian.com/oauth/token/accessible-resources"
+    google_userinfo_url: str = Field(
+        default="https://www.googleapis.com/oauth2/v2/userinfo"
     )
 
     rate_limit_per_minute: int = Field(default=1000)

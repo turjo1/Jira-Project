@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models.models import User, Credentials
 from app.schemas import AuthResponse, OAuthCallbackRequest
-from app.services.auth import JiraOAuth2Service, TokenService
+from app.services.auth import GoogleOAuth2Service, TokenService
 
 log = get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -65,16 +65,16 @@ async def requires_auth(
 @router.post("/jira", response_model=dict[str, str])
 async def initiate_jira_oauth() -> dict[str, str]:
     """
-    Initiate Jira OAuth2 login flow.
+    Initiate Google OAuth2 login flow.
 
     Returns:
-        dict with auth_url for redirecting user to Jira login
+        dict with auth_url for redirecting user to Google login
     """
     try:
         # Generate random state for CSRF protection
         state = str(uuid.uuid4())
 
-        oauth_service = JiraOAuth2Service()
+        oauth_service = GoogleOAuth2Service()
         authorization_url = await oauth_service.get_authorization_url(state)
 
         log.info("oauth.initiated", state=state[:8])
@@ -106,47 +106,45 @@ async def handle_oauth_callback(
         HTTPException: 401 if Jira API fails, 500 for other errors
     """
     try:
-        oauth_service = JiraOAuth2Service()
+        oauth_service = GoogleOAuth2Service()
 
-        # Step 1: Exchange authorization code for Jira access token
+        # Step 1: Exchange authorization code for Google access token
         log.info("oauth.exchanging_code", code=request.code[:8])
         token_response = await oauth_service.exchange_code_for_token(request.code)
-        jira_access_token = token_response.get("access_token")
+        google_access_token = token_response.get("access_token")
 
-        if not jira_access_token:
+        if not google_access_token:
             log.error("oauth.no_access_token_in_response", response=token_response)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Failed to obtain access token from Jira",
+                detail="Failed to obtain access token from Google",
             )
 
-        # Step 2: Fetch user info from Jira
+        # Step 2: Fetch user info from Google
         log.info("oauth.fetching_user_info")
-        resources = await oauth_service.get_accessible_resources(jira_access_token)
+        user_info = await oauth_service.get_user_info(google_access_token)
 
-        if not resources:
-            log.error("oauth.no_accessible_resources")
+        if not user_info:
+            log.error("oauth.no_user_info")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="No accessible Jira resources",
+                detail="Failed to get user info from Google",
             )
 
-        # Extract user info from first accessible resource
-        resource = resources[0]
-        jira_user_id = resource.get("id")
-        jira_instance_url = resource.get("url")
-        user_email = resource.get("email")
-        user_name = resource.get("name", user_email)
+        # Extract user info from Google response
+        google_user_id = user_info.get("id")
+        user_email = user_info.get("email")
+        user_name = user_info.get("name", user_email)
 
-        if not jira_user_id or not user_email or not jira_instance_url:
-            log.error("oauth.incomplete_user_info", resource=resource)
+        if not google_user_id or not user_email:
+            log.error("oauth.incomplete_user_info", user_info=user_info)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incomplete user information from Jira",
+                detail="Incomplete user information from Google",
             )
 
         # Step 3: Create or update user in database
-        log.info("oauth.upserting_user", email=user_email, jira_user_id=jira_user_id)
+        log.info("oauth.upserting_user", email=user_email, google_user_id=google_user_id)
 
         stmt = select(User).where(User.email == user_email)
         result = await db_session.execute(stmt)
@@ -155,7 +153,7 @@ async def handle_oauth_callback(
         if user:
             # Update existing user
             user.name = user_name
-            user.jira_user_id = jira_user_id
+            user.jira_user_id = google_user_id
             log.info("oauth.user_updated", user_id=user.id)
         else:
             # Create new user
@@ -163,27 +161,27 @@ async def handle_oauth_callback(
                 id=str(uuid.uuid4()),
                 email=user_email,
                 name=user_name,
-                jira_user_id=jira_user_id,
+                jira_user_id=google_user_id,
             )
             db_session.add(user)
             log.info("oauth.user_created", user_id=user.id, email=user_email)
 
         await db_session.flush()  # Ensure user.id is populated
 
-        # Step 4: Store encrypted Jira token in credentials
-        # Note: In production, encrypt jira_access_token before storing
+        # Step 4: Store encrypted Google token in credentials
+        # Note: In production, encrypt google_access_token before storing
         creds_stmt = select(Credentials).where(Credentials.user_id == user.id)
         creds_result = await db_session.execute(creds_stmt)
         credentials = creds_result.scalar_one_or_none()
 
         if credentials:
-            credentials.jira_instance_url = jira_instance_url
-            credentials.jira_token_encrypted = jira_access_token  # TODO: encrypt in production
+            credentials.jira_instance_url = "https://accounts.google.com"
+            credentials.jira_token_encrypted = google_access_token  # TODO: encrypt in production
         else:
             credentials = Credentials(
                 user_id=user.id,
-                jira_instance_url=jira_instance_url,
-                jira_token_encrypted=jira_access_token,  # TODO: encrypt in production
+                jira_instance_url="https://accounts.google.com",
+                jira_token_encrypted=google_access_token,  # TODO: encrypt in production
             )
             db_session.add(credentials)
 

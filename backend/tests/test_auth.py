@@ -8,16 +8,17 @@ from app.schemas import OAuthCallbackRequest
 
 
 @pytest.mark.asyncio
-async def test_initiate_jira_oauth(app_client):
-    """Test POST /auth/jira returns authorization URL."""
+async def test_initiate_google_oauth(app_client):
+    """Test POST /auth/jira returns Google authorization URL."""
     response = await app_client.post("/auth/jira")
 
     assert response.status_code == 200
     data = response.json()
     assert "auth_url" in data
-    assert "https://auth.atlassian.com/authorize" in data["auth_url"]
+    assert "accounts.google.com" in data["auth_url"]
     assert "client_id=" in data["auth_url"]
     assert "response_type=code" in data["auth_url"]
+    assert "scope=" in data["auth_url"]
     assert "state=" in data["auth_url"]
 
 
@@ -25,27 +26,24 @@ async def test_initiate_jira_oauth(app_client):
 async def test_oauth_callback_success(app_client, db_session):
     """Test POST /auth/callback exchanges code for JWT token."""
     mock_token_response = {
-        "access_token": "jira_access_token_123",
-        "token_type": "bearer",
+        "access_token": "google_access_token_123",
+        "token_type": "Bearer",
     }
 
-    mock_resources = [
-        {
-            "id": "jira_user_id_123",
-            "url": "https://myteam.atlassian.net",
-            "email": "user@example.com",
-            "name": "John Doe",
-        }
-    ]
+    mock_user_info = {
+        "id": "google_user_id_123",
+        "email": "user@example.com",
+        "name": "John Doe",
+    }
 
     with patch(
-        "app.routers.auth.JiraOAuth2Service.exchange_code_for_token",
+        "app.routers.auth.GoogleOAuth2Service.exchange_code_for_token",
         new_callable=AsyncMock,
         return_value=mock_token_response,
     ), patch(
-        "app.routers.auth.JiraOAuth2Service.get_accessible_resources",
+        "app.routers.auth.GoogleOAuth2Service.get_user_info",
         new_callable=AsyncMock,
-        return_value=mock_resources,
+        return_value=mock_user_info,
     ):
         request = OAuthCallbackRequest(code="oauth_code_123", state="state_123")
         response = await app_client.post(
@@ -65,23 +63,23 @@ async def test_oauth_callback_success(app_client, db_session):
     user = result.scalar_one_or_none()
     assert user is not None
     assert user.name == "John Doe"
-    assert user.jira_user_id == "jira_user_id_123"
+    assert user.jira_user_id == "google_user_id_123"
 
     # Verify credentials were stored
     creds_stmt = select(Credentials).where(Credentials.user_id == user.id)
     creds_result = await db_session.execute(creds_stmt)
     credentials = creds_result.scalar_one_or_none()
     assert credentials is not None
-    assert credentials.jira_instance_url == "https://myteam.atlassian.net"
+    assert credentials.jira_instance_url == "https://accounts.google.com"
 
 
 @pytest.mark.asyncio
-async def test_oauth_callback_jira_api_error(app_client):
-    """Test POST /auth/callback handles Jira API errors."""
+async def test_oauth_callback_google_api_error(app_client):
+    """Test POST /auth/callback handles Google API errors."""
     with patch(
-        "app.routers.auth.JiraOAuth2Service.exchange_code_for_token",
+        "app.routers.auth.GoogleOAuth2Service.exchange_code_for_token",
         new_callable=AsyncMock,
-        side_effect=Exception("Jira API error"),
+        side_effect=Exception("Google API error"),
     ):
         response = await app_client.post(
             "/auth/callback",

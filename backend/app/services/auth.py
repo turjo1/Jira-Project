@@ -11,26 +11,28 @@ log = structlog.get_logger(__name__)
 settings = get_settings()
 
 
-class JiraOAuth2Service:
-    """Service for handling Jira OAuth2 flow."""
+class GoogleOAuth2Service:
+    """Service for handling Google OAuth2 flow (with local testing support)."""
 
     def __init__(self):
-        self.client_id = settings.jira_client_id
-        self.client_secret = settings.jira_client_secret
-        self.redirect_uri = settings.jira_redirect_uri
-        self.authorize_url = settings.jira_oauth_authorize_url
-        self.token_url = settings.jira_oauth_token_url
-        self.accessible_resources_url = settings.jira_accessible_resources_url
+        self.client_id = settings.google_client_id or "test-client-id"
+        self.client_secret = settings.google_client_secret or "test-client-secret"
+        self.redirect_uri = settings.google_redirect_uri
+        self.authorize_url = settings.google_oauth_authorize_url
+        self.token_url = settings.google_oauth_token_url
+        self.userinfo_url = settings.google_userinfo_url
+        self.is_test_mode = not settings.google_client_id
 
     async def get_authorization_url(self, state: str) -> str:
-        """Generate Jira OAuth2 authorization URL."""
+        """Generate Google OAuth2 authorization URL."""
         return (
             f"{self.authorize_url}"
             f"?client_id={self.client_id}"
             f"&redirect_uri={self.redirect_uri}"
             f"&response_type=code"
             f"&state={state}"
-            f"&scope=read:me"
+            f"&scope=openid+email+profile"
+            f"&access_type=offline"
         )
 
     async def exchange_code_for_token(self, code: str) -> dict:
@@ -50,11 +52,11 @@ class JiraOAuth2Service:
             response.raise_for_status()
             return response.json()
 
-    async def get_accessible_resources(self, access_token: str) -> list[dict]:
-        """Get list of Jira instances accessible with the access token."""
+    async def get_user_info(self, access_token: str) -> dict:
+        """Get user info from Google using the access token."""
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                self.accessible_resources_url,
+                self.userinfo_url,
                 headers={
                     "Authorization": f"Bearer {access_token}",
                     "Accept": "application/json",

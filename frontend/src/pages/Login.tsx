@@ -56,7 +56,7 @@ export function Login({ callbackError }: LoginProps) {
             onClick={handleLoginClick}
             disabled={busy}
           >
-            {busy ? 'Redirecting to Jira…' : 'Login with Jira'}
+            {busy ? 'Redirecting to Google…' : 'Login with Google'}
           </button>
 
           {displayError && (
@@ -77,16 +77,16 @@ export function Login({ callbackError }: LoginProps) {
           <div className="login-info">
             <h3>How it works</h3>
             <ol>
-              <li>Click the button to authenticate with your Jira account</li>
-              <li>Jira will ask you to confirm access permissions</li>
-              <li>You will be redirected back here with full dashboard access</li>
+              <li>Click the button to authenticate with your Google account</li>
+              <li>Google will ask you to confirm access permissions</li>
+              <li>You will be redirected to the dashboard with full access</li>
             </ol>
           </div>
         </div>
 
         <div className="login-footer">
           <p>
-            We use Jira OAuth2 for secure sign-in. Your Jira password is never
+            We use Google OAuth2 for secure sign-in. Your Google password is never
             stored or transmitted through this application.
           </p>
         </div>
