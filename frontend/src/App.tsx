@@ -22,32 +22,7 @@ function App() {
       const testToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIn0.test';
       login(testToken, 'test-user-123');
 
-      setIsInitializing(false);
-    };
-
-    boot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (isInitializing) {
-    return (
-      <div className="app">
-        <div className="app-loading">
-          <p>Loading…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Login callbackError={callbackError} />;
-  }
-
-  // Auto-select the first team if none is selected yet
-  useEffect(() => {
-    if (selectedTeamId || autoSelectTeamId) return;
-
-    const autoSelect = async () => {
+      // Auto-select first team
       try {
         const response = await apiClient.getTeams() as Array<{ id: string; name: string }>;
         if (Array.isArray(response) && response.length > 0) {
@@ -56,13 +31,15 @@ function App() {
           setSelectedTeamId(firstTeamId);
         }
       } catch (err) {
-        console.error('Failed to auto-select first team:', err);
+        console.error('Failed to get teams:', err);
       }
+
+      setIsInitializing(false);
     };
 
-    autoSelect();
+    boot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTeamId]);
+  }, []);
 
   const activeTeamId = selectedTeamId || autoSelectTeamId;
 
