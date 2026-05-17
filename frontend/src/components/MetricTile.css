@@ -1,0 +1,87 @@
+/* Metric Tile Component Styles */
+
+.metric-tile {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.metric-tile:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  transform: translateY(-2px);
+}
+
+.metric-tile:active {
+  transform: translateY(0);
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-icon {
+  color: #d1d5db;
+  opacity: 0.5;
+}
+
+.metric-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.metric-value .value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.metric-value .unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-left: 4px;
+}
+
+.metric-comparison {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #9ca3af;
+}
+
+.comparison-text.positive {
+  color: #10b981;
+}
+
+.comparison-text.negative {
+  color: #ef4444;
+}

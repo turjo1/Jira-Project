@@ -1,0 +1,168 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: celery-beat
+  annotations:
+    description: "Celery Beat scheduler - runs recurring tasks (5-minute Jira sync)"
+spec:
+  replicas: 1  # MUST be 1 - singleton scheduler
+  strategy:
+    type: Recreate  # Must be Recreate for singleton
+  selector:
+    matchLabels:
+      app: jira-analytics
+      component: celery-beat
+  template:
+    metadata:
+      labels:
+        app: jira-analytics
+        component: celery-beat
+    spec:
+      serviceAccountName: jira-analytics
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: celery-beat
+          image: docker.io/YOUR_DOCKER_USERNAME/jira-analytics-backend:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - app.tasks
+            - beat
+            - --loglevel=info
+            - --scheduler=redbeat.RedBeatScheduler
+
+          env:
+            # Database
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: connection-string
+
+            # Redis/Celery
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: CELERY_BROKER_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: CELERY_RESULT_BACKEND
+            - name: CELERY_TIMEZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: CELERY_TIMEZONE
+
+            # Jira OAuth
+            - name: JIRA_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: jira-oauth-credentials
+                  key: client-id
+            - name: JIRA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jira-oauth-credentials
+                  key: client-secret
+            - name: JIRA_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: JIRA_API_URL
+
+            # Sync interval
+            - name: SYNC_INTERVAL_MINUTES
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: SYNC_INTERVAL_MINUTES
+
+            # Application
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: LOG_LEVEL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: ENVIRONMENT
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: beat-schedule
+              mountPath: /app/beat-schedule
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+
+          # Liveness probe - check if Beat is running
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - ps aux | grep -E 'celery.*beat' | grep -v grep
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: beat-schedule
+          emptyDir: {}
+
+      # Node affinity - schedule on a dedicated node if available
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: workload-type
+                    operator: In
+                    values:
+                      - scheduler
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-beat-pdb
+  namespace: jira-analytics
+spec:
+  # Allow zero disruptions - Beat is a singleton and must stay running
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: jira-analytics
+      component: celery-beat

@@ -1,0 +1,34 @@
+[
+  {
+    "accountId": "jira-user-123",
+    "displayName": "Test User",
+    "emailAddress": "testuser@example.com",
+    "active": true,
+    "timeZone": "UTC",
+    "role": "member"
+  },
+  {
+    "accountId": "jira-user-456",
+    "displayName": "Another User",
+    "emailAddress": "another@example.com",
+    "active": true,
+    "timeZone": "UTC",
+    "role": "member"
+  },
+  {
+    "accountId": "jira-manager-123",
+    "displayName": "Manager User",
+    "emailAddress": "manager@example.com",
+    "active": true,
+    "timeZone": "UTC",
+    "role": "manager"
+  },
+  {
+    "accountId": "jira-admin-123",
+    "displayName": "Admin User",
+    "emailAddress": "admin@example.com",
+    "active": true,
+    "timeZone": "UTC",
+    "role": "admin"
+  }
+]

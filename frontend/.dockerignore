@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+.git
+.gitignore
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+*.md
+coverage
+.cache
+.parcel-cache
+.next
+.nuxt

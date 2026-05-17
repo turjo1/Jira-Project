@@ -1,0 +1,99 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+aiomysql://app:app@mysql:3306/jira_analytics
+      REDIS_URL: redis://redis:6379/0
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-dev-insecure-change-me}
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-dev-insecure-32byte-key-change!!}
+      JIRA_CLIENT_ID: ${JIRA_CLIENT_ID:-}
+      JIRA_CLIENT_SECRET: ${JIRA_CLIENT_SECRET:-}
+      JIRA_REDIRECT_URI: ${JIRA_REDIRECT_URI:-http://localhost:8000/auth/callback}
+      LOG_LEVEL: INFO
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: jira_analytics
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uapp", "-papp"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  celery-worker:
+    build: .
+    environment:
+      DATABASE_URL: mysql+aiomysql://app:app@mysql:3306/jira_analytics
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-dev-insecure-change-me}
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-dev-insecure-32byte-key-change!!}
+      JIRA_CLIENT_ID: ${JIRA_CLIENT_ID:-}
+      JIRA_CLIENT_SECRET: ${JIRA_CLIENT_SECRET:-}
+      JIRA_REDIRECT_URI: ${JIRA_REDIRECT_URI:-http://localhost:8000/auth/callback}
+      LOG_LEVEL: INFO
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+    command: python celery_worker.py
+
+  celery-beat:
+    build: .
+    environment:
+      DATABASE_URL: mysql+aiomysql://app:app@mysql:3306/jira_analytics
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      REDIS_URL: redis://redis:6379/0
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-dev-insecure-change-me}
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-dev-insecure-32byte-key-change!!}
+      JIRA_CLIENT_ID: ${JIRA_CLIENT_ID:-}
+      JIRA_CLIENT_SECRET: ${JIRA_CLIENT_SECRET:-}
+      JIRA_REDIRECT_URI: ${JIRA_REDIRECT_URI:-http://localhost:8000/auth/callback}
+      LOG_LEVEL: INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+    volumes:
+      - ./:/app
+    command: python celery_beat.py
+
+volumes:
+  mysql_data:
+  redis_data:

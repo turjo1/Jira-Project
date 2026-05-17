@@ -1,0 +1,300 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: jira-analytics
+    component: backend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: backend
+  annotations:
+    description: "FastAPI backend service for Jira analytics"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: jira-analytics
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: jira-analytics
+        component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: jira-analytics
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      # Init container to run database migrations
+      initContainers:
+        - name: migrate
+          image: docker.io/YOUR_DOCKER_USERNAME/jira-analytics-backend:latest
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - |
+              alembic upgrade head && \
+              echo "Database migrations completed successfully"
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: connection-string
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: LOG_LEVEL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+      containers:
+        - name: fastapi
+          image: docker.io/YOUR_DOCKER_USERNAME/jira-analytics-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+            - containerPort: 8001
+              name: metrics
+              protocol: TCP
+
+          env:
+            # Database
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: connection-string
+            - name: DATABASE_POOL_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: DATABASE_POOL_SIZE
+            - name: DATABASE_MAX_OVERFLOW
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: DATABASE_MAX_OVERFLOW
+            - name: DATABASE_POOL_RECYCLE
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: DATABASE_POOL_RECYCLE
+
+            # Redis
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+
+            # JWT
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: key
+            - name: JWT_ALGORITHM
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: JWT_ALGORITHM
+            - name: JWT_EXPIRATION_HOURS
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: JWT_EXPIRATION_HOURS
+
+            # Jira OAuth
+            - name: JIRA_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: jira-oauth-credentials
+                  key: client-id
+            - name: JIRA_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jira-oauth-credentials
+                  key: client-secret
+            - name: JIRA_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: JIRA_API_URL
+
+            # Celery
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: CELERY_BROKER_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: CELERY_RESULT_BACKEND
+
+            # Application
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: LOG_LEVEL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: ENVIRONMENT
+            - name: DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: jira-analytics-config
+                  key: DEBUG
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+          # Liveness probe - ensure pod is alive
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness probe - ensure pod is ready for traffic
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - jira-analytics
+                    - key: component
+                      operator: In
+                      values:
+                        - backend
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fastapi-pdb
+  namespace: jira-analytics
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: jira-analytics
+      component: backend
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fastapi-hpa
+  namespace: jira-analytics
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fastapi
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 30

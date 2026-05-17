@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  mock-jira:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - jira-testing
+
+networks:
+  jira-testing:
+    driver: bridge

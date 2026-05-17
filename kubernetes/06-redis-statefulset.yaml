@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: cache
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: redis
+  selector:
+    app: jira-analytics
+    component: cache
+  clusterIP: None  # Headless service for StatefulSet
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: cache
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jira-analytics
+      component: cache
+  template:
+    metadata:
+      labels:
+        app: jira-analytics
+        component: cache
+    spec:
+      serviceAccountName: jira-analytics
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6379
+              name: redis
+              protocol: TCP
+          command:
+            - redis-server
+            - /usr/local/etc/redis/redis.conf
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /usr/local/etc/redis
+            - name: tmp
+              mountPath: /tmp
+
+          # Liveness probe - check if Redis responds to ping
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness probe - check if Redis is ready
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+        - name: tmp
+          emptyDir: {}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: jira-analytics
+          component: cache
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: standard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: cache
+data:
+  redis.conf: |
+    # Redis Configuration for Kubernetes
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    appendonly yes
+    appendfsync everysec
+
+    # Memory Management
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+
+    # Network
+    bind 0.0.0.0
+    port 6379
+    timeout 0
+    tcp-keepalive 300
+
+    # Connection Management
+    databases 16
+
+    # Logging
+    loglevel notice
+    logfile ""
+
+    # Data directory
+    dir /data
+
+    # Disable dangerous commands in production
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    rename-command CONFIG "CONFIG_${REDIS_AUTH_SECRET}"
+
+    # Replication settings (for future HA)
+    slave-read-only yes
+    slave-priority 100
+
+    # Performance tuning
+    slowlog-log-slower-than 10000
+    slowlog-max-len 128
+    latency-monitor-threshold 0

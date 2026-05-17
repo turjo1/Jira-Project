@@ -1,0 +1,134 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jira-analytics-cert
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+spec:
+  secretName: tls-jira-analytics
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - jira-analytics.example.com
+    - "*.jira-analytics.example.com"
+  duration: 2160h  # 90 days
+  renewBefore: 360h  # 15 days
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jira-analytics-ingress
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: api
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - jira-analytics.example.com
+      secretName: tls-jira-analytics
+  rules:
+    - host: jira-analytics.example.com
+      http:
+        paths:
+          # Frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+
+          # API endpoints
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8000
+
+          # WebSocket
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8000
+
+          # Health check
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8000
+---
+# Optional: Ingress for metrics/monitoring (restricted)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jira-analytics-internal
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+  annotations:
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Jira Analytics Monitoring"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - metrics.jira-analytics.example.com
+      secretName: tls-jira-analytics-metrics
+  rules:
+    - host: metrics.jira-analytics.example.com
+      http:
+        paths:
+          # Prometheus metrics
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8001
+---
+# Basic auth secret for metrics endpoint (replace with your credentials)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth
+  namespace: jira-analytics
+type: Opaque
+data:
+  # Generate with: htpasswd -c auth prometheus
+  # Then base64 encode the auth file
+  # echo -n "username:password" | base64
+  auth: cHJvbWV0aGV1czpjaGFuZ2VtZQ==  # prometheus:changeme

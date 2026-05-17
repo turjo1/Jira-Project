@@ -1,0 +1,75 @@
+/* Team Selector Component Styles */
+
+.team-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.team-selector label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+  white-space: nowrap;
+  margin: 0;
+}
+
+.team-selector select {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 180px;
+}
+
+.team-selector select:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.team-selector select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.team-selector select:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.team-selector.error {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.team-selector .error-message {
+  font-size: 12px;
+  color: #dc2626;
+  margin-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .team-selector {
+    width: 100%;
+  }
+
+  .team-selector select {
+    min-width: auto;
+    flex: 1;
+  }
+}

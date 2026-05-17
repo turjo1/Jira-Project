@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: database
+spec:
+  ports:
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
+      name: mysql
+  selector:
+    app: jira-analytics
+    component: database
+  clusterIP: None  # Headless service for StatefulSet
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: jira-analytics
+  labels:
+    app: jira-analytics
+    component: database
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jira-analytics
+      component: database
+  template:
+    metadata:
+      labels:
+        app: jira-analytics
+        component: database
+    spec:
+      serviceAccountName: jira-analytics
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3306
+              name: mysql
+              protocol: TCP
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-credentials
+                  key: root-password
+            - name: MYSQL_DATABASE
+              value: jira_analytics
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-credentials
+                  key: jira-username
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-credentials
+                  key: jira-password
+            - name: MYSQL_INITDB_SKIP_TZINFO
+              value: "yes"
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: mysql-config
+              mountPath: /etc/mysql/conf.d
+            - name: tmp
+              mountPath: /tmp
+            - name: var-run
+              mountPath: /var/run/mysqld
+
+          # Liveness probe - check if database is responding
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # Readiness probe - check if database is ready for connections
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+      volumes:
+        - name: mysql-config
+          configMap:
+            name: mysql-init-config
+        - name: tmp
+          emptyDir: {}
+        - name: var-run
+          emptyDir: {}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app: jira-analytics
+          component: database
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+        storageClassName: standard

@@ -1,0 +1,207 @@
+/* =================================================================
+   Workpulse — print-friendly overrides
+   Loaded AFTER styles.css in Workpulse-print.html
+   ================================================================= */
+
+/* ---- screen preview: show pages as A3-landscape "sheets" on a grey board */
+html, body { background: #E5E7EB; }
+
+.print-doc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0 48px;
+  gap: 24px;
+}
+
+.print-page {
+  width: 1380px;     /* matches A3 landscape minus margin at ~96dpi-ish */
+  background: #FFFFFF;
+  box-shadow: 0 4px 18px -6px rgba(17,24,39,.18);
+  padding: 36px 44px 44px;
+  box-sizing: border-box;
+}
+
+/* page-level header shown on each sheet */
+.print-page__head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.print-page__title {
+  display: flex; align-items: center; gap: 12px;
+}
+.print-page__title .brandmark {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563EB 0%, #14B8A6 100%);
+  display: grid; place-items: center;
+  color: white; font-weight: 700;
+  font-size: 13px; letter-spacing: 0.04em;
+}
+.print-page__title h1 {
+  margin: 0;
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+.print-page__title .sub {
+  font-size: 12px; color: var(--text-2);
+  margin-top: 2px;
+}
+.print-page__meta {
+  display: flex; flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.print-page__meta b { color: var(--text-1); font-weight: 600; }
+.print-page__meta .crumb {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+/* ---- Dashboard: force 4-col tile grid regardless of preview viewport ---- */
+.print-page .dash-grid {
+  grid-template-columns: repeat(4, 1fr) !important;
+}
+.print-page .dash-row {
+  grid-template-columns: 1.4fr 1fr !important;
+}
+
+/* ---- Board: flatten the pan/zoom canvas into a static 2-col grid ---- */
+.print-page .canvas-shell {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  cursor: default !important;
+  border-radius: 0 !important;
+}
+.print-page .canvas-inner {
+  position: static !important;
+  transform: none !important;
+  width: 100% !important;
+  height: auto !important;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 36px;
+  row-gap: 60px;
+  padding-top: 28px;
+}
+.print-page .canvas-inner > .frame {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  width: auto !important;
+  min-height: 0 !important;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.print-page .canvas-inner > svg.connections { display: none !important; }
+
+/* float frame title inside the page flow (not absolutely above the frame) */
+.print-page .frame__title {
+  position: static !important;
+  margin-bottom: 8px;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+.print-page .frame__title-dots { display: none !important; }
+
+/* hide canvas chrome that doesn't make sense in print */
+.print-page .canvas-toolbar,
+.print-page .canvas-legend,
+.print-page .canvas-bottleneck-banner { display: none !important; }
+
+/* board footer hint text — drop it */
+.print-page .board-hint { display: none !important; }
+
+/* ---- Table: drop scroll container and viewport caps ---- */
+.print-page .tbl-scroll {
+  max-height: none !important;
+  overflow: visible !important;
+}
+.print-page .tbl thead th {
+  position: static !important;   /* sticky-headers don't repeat well in print */
+}
+.print-page .table-shell {
+  break-inside: auto;
+}
+.print-page .tbl tbody tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* hide screen-only interactive bits */
+.print-page .table-bar .spacer + button,    /* column-config gear */
+.print-page .table-bar .search,
+.print-page .table-bar .filter-chip,
+.print-page .table-selbar,
+.print-page .table-toast { display: none !important; }
+.print-page .table-bar {
+  justify-content: space-between;
+}
+.print-page .table-bar::before {
+  content: attr(data-summary);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* hide tweaks panel + modal portals during print */
+.tweaks-panel,
+.modal-backdrop { display: none !important; }
+
+/* ---- @media print: real paper output ---- */
+@media print {
+  @page {
+    size: A3 landscape;
+    margin: 12mm;
+  }
+  html, body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-doc {
+    padding: 0;
+    gap: 0;
+  }
+  .print-page {
+    width: 100% !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  /* preserve big backgrounds (badges, status bar, etc) */
+  .badge, .role-pill, .tile__indicator,
+  .status-bar > div, .chart .bar,
+  .brandmark, .frame__col,
+  .mini-card, .table-toast { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Avoid breaking key blocks across pages */
+  .tile, .card, .frame, .mini-tickets .row,
+  .metrics-row .m, .feed__item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* dashboard secondary row should stay together if possible */
+  .dash-row { break-inside: avoid; page-break-inside: avoid; }
+}

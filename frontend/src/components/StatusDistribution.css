@@ -1,0 +1,122 @@
+/* Status Distribution Component Styles */
+
+.status-distribution {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.status-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.status-chart {
+  padding: 12px 0;
+}
+
+.status-bars {
+  display: flex;
+  height: 24px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #f3f4f6;
+  gap: 2px;
+}
+
+.status-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+
+.status-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-detail-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.detail-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.status-name {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.detail-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail-count .count {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.detail-count .dwell-time {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.open-board-btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.open-board-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #f0f9ff;
+}
