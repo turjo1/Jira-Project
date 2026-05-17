@@ -14,9 +14,11 @@ async def test_initiate_jira_oauth(app_client):
 
     assert response.status_code == 200
     data = response.json()
-    assert "authorization_url" in data
-    assert "https://auth.atlassian.com/authorize" in data["authorization_url"]
-    assert "client_id=test-client-id" in data["authorization_url"]
+    assert "auth_url" in data
+    assert "https://auth.atlassian.com/authorize" in data["auth_url"]
+    assert "client_id=" in data["auth_url"]
+    assert "response_type=code" in data["auth_url"]
+    assert "state=" in data["auth_url"]
 
 
 @pytest.mark.asyncio

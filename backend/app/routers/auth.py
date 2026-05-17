@@ -68,7 +68,7 @@ async def initiate_jira_oauth() -> dict[str, str]:
     Initiate Jira OAuth2 login flow.
 
     Returns:
-        dict with authorization_url for redirecting user to Jira login
+        dict with auth_url for redirecting user to Jira login
     """
     try:
         # Generate random state for CSRF protection
@@ -78,7 +78,7 @@ async def initiate_jira_oauth() -> dict[str, str]:
         authorization_url = await oauth_service.get_authorization_url(state)
 
         log.info("oauth.initiated", state=state[:8])
-        return {"authorization_url": authorization_url}
+        return {"auth_url": authorization_url}
     except Exception as e:
         log.error("oauth.initiation_failed", error=str(e))
         raise HTTPException(
