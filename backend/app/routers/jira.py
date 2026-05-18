@@ -103,6 +103,33 @@ async def _fetch_projects(domain: str, headers: Dict[str, str]) -> List[Dict[str
         return [{"key": p["key"], "name": p["name"]} for p in resp.json().get("values", [])]
 
 
+async def _fetch_active_sprint(domain: str, headers: Dict[str, str], project_key: str) -> str:
+    """Return the name of the active sprint for the first board of the given project, or ''."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            board_resp = await client.get(
+                f"https://{domain}/rest/agile/1.0/board",
+                headers=headers,
+                params={"projectKeyOrId": project_key, "maxResults": 1},
+            )
+            board_resp.raise_for_status()
+            boards = board_resp.json().get("values", [])
+            if not boards:
+                return ""
+            board_id = boards[0]["id"]
+
+            sprint_resp = await client.get(
+                f"https://{domain}/rest/agile/1.0/board/{board_id}/sprint",
+                headers=headers,
+                params={"state": "active", "maxResults": 1},
+            )
+            sprint_resp.raise_for_status()
+            sprints = sprint_resp.json().get("values", [])
+            return sprints[0]["name"] if sprints else ""
+    except Exception:
+        return ""
+
+
 async def _fetch_all_issues(domain: str, email: str, api_token: str) -> tuple:
     """Fetch all Jira issues. Returns (issues, projects) where projects is [{key, name}]."""
     headers = _basic_auth_headers(email, api_token)
@@ -189,6 +216,8 @@ async def get_jira_data() -> Dict[str, Any]:
         email = config["email"]
 
         jira_issues, jira_projects = await _fetch_all_issues(domain, email, api_token)
+        headers = _basic_auth_headers(email, api_token)
+        sprint_name = await _fetch_active_sprint(domain, headers, jira_projects[0]["key"]) if jira_projects else ""
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=502, detail=f"Jira API error: {e.response.status_code}")
     except Exception as e:
@@ -351,6 +380,6 @@ async def get_jira_data() -> Dict[str, Any]:
         "project": {
             "key": jira_projects[0]["key"] if jira_projects else domain.split(".")[0].upper(),
             "name": jira_projects[0]["name"] if jira_projects else domain.split(".")[0].capitalize(),
-            "sprint": config.get("sprint", ""),
+            "sprint": sprint_name or config.get("sprint", ""),
         },
     }
