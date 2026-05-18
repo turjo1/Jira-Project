@@ -1,7 +1,7 @@
 """Service for calculating team performance metrics."""
 from datetime import datetime, timedelta
 from typing import Optional
-from sqlalchemy import func, and_, select, case
+from sqlalchemy import func, and_, select, case, text
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
@@ -20,10 +20,10 @@ class MetricsService:
         """Calculate average cycle time (days from creation to resolution)."""
         cutoff_date = datetime.now() - timedelta(days=days_back)
 
-        # Use julianday for SQLite compatibility; wraps in case() to handle NULLs
+        # Calculate cycle time in days (MySQL: DATEDIFF, SQLite: julianday)
         cycle_time_calc = case(
             (Ticket.resolved_at.isnot(None),
-             func.julianday(Ticket.resolved_at) - func.julianday(Ticket.created_at)),
+             func.timestampdiff(text('DAY'), Ticket.created_at, Ticket.resolved_at)),
             else_=0
         )
 
@@ -120,7 +120,7 @@ class MetricsService:
         # Join current and previous transitions for the same ticket where prev_id < curr_id
         dwell_time_calc = case(
             (curr_trans.transitioned_at.isnot(None),
-             func.julianday(curr_trans.transitioned_at) - func.julianday(prev_trans.transitioned_at)),
+             func.timestampdiff(text('DAY'), prev_trans.transitioned_at, curr_trans.transitioned_at)),
             else_=0
         )
 
@@ -153,10 +153,10 @@ class MetricsService:
     @staticmethod
     async def get_status_distribution(session: AsyncSession, team_id: str) -> dict:
         """Get distribution of tickets across statuses."""
-        # Use julianday for SQLite compatibility; wraps in case() to handle NULLs
+        # Calculate cycle time in days (MySQL: DATEDIFF, SQLite: julianday)
         cycle_time_calc = case(
             (Ticket.resolved_at.isnot(None),
-             func.julianday(Ticket.resolved_at) - func.julianday(Ticket.created_at)),
+             func.timestampdiff(text('DAY'), Ticket.created_at, Ticket.resolved_at)),
             else_=0
         )
 

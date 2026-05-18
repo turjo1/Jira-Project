@@ -168,12 +168,13 @@ async def sync_team_jira_data(
             # Map assignee
             assignee_id = None
             if fields.get("assignee"):
-                assignee = await session.execute(
+                assignee_result = await session.execute(
                     select(User).where(
                         User.jira_user_id == fields["assignee"].get("accountId")
                     )
                 )
-                assignee_id = assignee.scalar_one()
+                assignee_user = assignee_result.scalar_one_or_none()
+                assignee_id = assignee_user.id if assignee_user else None
 
             # Parse timestamps
             created_at = JiraAPIService.parse_jira_timestamp(fields.get("created"))
@@ -260,7 +261,8 @@ async def sync_team_jira_data(
                                         == history["author"].get("accountId")
                                     )
                                 )
-                                actor_id = actor_result.scalar_one_or_none().id if actor_result.scalar_one_or_none() else None
+                                actor_user = actor_result.scalar_one_or_none()
+                                actor_id = actor_user.id if actor_user else None
 
                             # Create transition record
                             transition = TicketTransition(

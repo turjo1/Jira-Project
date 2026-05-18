@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestLatencyMiddleware
-from app.routers import health, dashboard, auth, teams, developers
+from app.routers import health, dashboard, auth, teams, developers, jira
 from app.websocket import router as ws_router, manager as ws_manager
 
 
@@ -57,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router)
     app.include_router(teams.router)
     app.include_router(developers.router)
+    app.include_router(jira.router)
     app.include_router(ws_router.router)
     return app
 

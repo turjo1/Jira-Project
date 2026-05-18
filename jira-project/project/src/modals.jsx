@@ -279,11 +279,12 @@ function SecretField({ value, onChange, placeholder, isText }) {
 
 }
 
-function SettingsModal({ onClose, aiKeys, setAiKeys, activeModelId, setActiveModelId }) {
+function SettingsModal({ onClose, onSaveJira, aiKeys, setAiKeys, activeModelId, setActiveModelId }) {
   /* in-memory only — wire to real persistence later */
   const [jiraDomain, setJiraDomain] = React.useState('acme.atlassian.net');
   const [jiraEmail, setJiraEmail] = React.useState('mo@acme.com');
   const [jiraKey, setJiraKey] = React.useState('ATATT3xFfGF0a3R…');
+  const [saving, setSaving] = React.useState(false);
 
   const usedProviders = new Set(aiKeys.map((k) => k.provider));
   const firstUnused = AI_PROVIDERS.find((p) => !usedProviders.has(p.id)) || AI_PROVIDERS[0];
@@ -336,10 +337,17 @@ function SettingsModal({ onClose, aiKeys, setAiKeys, activeModelId, setActiveMod
             <h3>Jira API Key</h3>
             <p>Read tickets, statuses, and transitions from your Jira workspace.</p>
           </div>
-          <span className={cls('settings-status', jiraConnected && 'connected')}>
-            <span className="pulse"></span>
-            {jiraConnected ? 'Connected' : 'Not connected'}
-          </span>
+          <button
+            className="btn btn-primary"
+            disabled={!jiraConnected || saving}
+            onClick={async () => {
+              setSaving(true);
+              await onSaveJira({ domain: jiraDomain, email: jiraEmail, api_token: jiraKey });
+              setSaving(false);
+            }}
+          >
+            {saving ? 'Connecting…' : 'Save & Connect'}
+          </button>
         </div>
 
         <div className="settings-section__body">

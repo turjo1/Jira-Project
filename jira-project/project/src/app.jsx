@@ -6,7 +6,9 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 } /*EDITMODE-END*/;
 
 function App() {
-  const data = window.JIRA_DATA;
+  const [data, setData] = useStateApp(window.JIRA_DATA);
+  const [loading, setLoading] = useStateApp(false);
+  const [dataError, setDataError] = useStateApp(null);
   const [view, setView] = useStateApp('dashboard');
   const [drilldown, setDrilldown] = useStateApp(null); // user
   const [ticketDetail, setTicketDetail] = useStateApp(null); // ticket
@@ -41,6 +43,26 @@ function App() {
   useEffectApp(() => {
     document.documentElement.setAttribute('data-theme', tweaks.theme);
   }, [tweaks.theme]);
+
+  // Fetch real data from backend
+  async function fetchData() {
+    setLoading(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/jira/data');
+      if (res.ok) {
+        setData(await res.json());
+        setDataError(null);
+      } else if (res.status !== 404) {
+        setDataError('Failed to load Jira data');
+      }
+      // 404 = not configured yet, stay on mock data silently
+    } catch (e) {
+      // Backend offline — stay on mock data silently
+    }
+    setLoading(false);
+  }
+
+  useEffectApp(() => { fetchData(); }, []);
 
   // Live-sync counter
   useEffectApp(() => {
@@ -95,10 +117,13 @@ function App() {
 
         <div className="nav__sync" title="Live data from Jira; syncs every 5 minutes">
           <span className="sync-dot"></span>
-          <span>Synced <b style={{ color: 'var(--text-1)', fontWeight: 600 }}>{fmtSync(secsAgo)}</b></span>
+          {loading
+            ? <span>Syncing…</span>
+            : <span>Synced <b style={{ color: 'var(--text-1)', fontWeight: 600 }}>{fmtSync(secsAgo)}</b></span>
+          }
         </div>
 
-        <button className="btn btn-icon" title="Refresh now" onClick={() => setSecsAgo(0)} aria-label="Refresh">
+        <button className="btn btn-icon" title="Refresh now" onClick={() => { setSecsAgo(0); fetchData(); }} aria-label="Refresh">
           <Icon.Refresh />
         </button>
 
@@ -215,6 +240,22 @@ function App() {
       {settingsOpen &&
       <SettingsModal
         onClose={() => setSettingsOpen(false)}
+        onSaveJira={async (creds) => {
+          try {
+            const res = await fetch('http://localhost:8000/api/jira/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(creds)
+            });
+            if (res.ok) {
+              fetchData();
+            } else {
+              alert('Failed to save Jira credentials');
+            }
+          } catch (e) {
+            alert('Error saving credentials: ' + e.message);
+          }
+        }}
         aiKeys={aiKeys}
         setAiKeys={setAiKeys}
         activeModelId={activeModelId}
