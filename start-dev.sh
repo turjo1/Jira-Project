@@ -11,8 +11,8 @@ PROJECT_DIR="/Users/turjomazumder/Antigravity Project/Jira Project"
 echo -e "${GREEN}=== Starting Jira Team Performance Analytics ===${NC}\n"
 
 # Check if ports are available
-if lsof -Pi :5173 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
-    echo -e "${RED}❌ Port 5173 is already in use${NC}"
+if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+    echo -e "${RED}❌ Port 3000 is already in use${NC}"
     exit 1
 fi
 
@@ -31,22 +31,22 @@ echo "   Logs: $PROJECT_DIR/backend/backend.log"
 
 sleep 3
 
-echo -e "\n${YELLOW}Starting Frontend (Vite)...${NC}"
-cd "$PROJECT_DIR/frontend"
-npm run dev > frontend.log 2>&1 &
+echo -e "\n${YELLOW}Starting Frontend (Workpulse Standalone)...${NC}"
+cd "$PROJECT_DIR/jira-project/project"
+python3 -m http.server 3000 > frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo -e "${GREEN}✅ Frontend PID: $FRONTEND_PID${NC}"
-echo "   Logs: $PROJECT_DIR/frontend/frontend.log"
+echo "   Logs: $PROJECT_DIR/jira-project/project/frontend.log"
 
 sleep 5
 
 echo -e "\n${GREEN}=== Services Started ===${NC}"
-echo -e "Frontend: ${GREEN}http://localhost:5173${NC}"
+echo -e "Frontend: ${GREEN}http://localhost:3000/Workpulse.html${NC}"
 echo -e "Backend:  ${GREEN}http://localhost:8000${NC}"
 echo -e "Health:   ${GREEN}http://localhost:8000/health${NC}"
 
 echo -e "\n${YELLOW}Opening Chrome...${NC}"
-open -a "Google Chrome" http://localhost:5173
+open -a "Google Chrome" http://localhost:3000/Workpulse.html
 
 echo -e "\n${YELLOW}View logs with:${NC}"
 echo "  Backend:  tail -f $PROJECT_DIR/backend/backend.log"
