@@ -1,7 +1,7 @@
-// Mock data: a mobile payments product team ("Wallet Mobile")
-// Roles: Dev (#3B82F6), QA (#A855F7), PO (#14B8A6)
+window.JIRA_DATA = null;
 
-window.JIRA_DATA = (function () {
+// Mock data removed — app fetches live from http://localhost:8000/api/jira/data
+(function () { // kept so Workpulse.html script tag doesn't break
   const team = [
     { id: 'u1', name: 'Maya Okafor',    role: 'po',  initials: 'MO', hue: 168 },
     { id: 'u2', name: 'Diego Alvarez',  role: 'dev', initials: 'DA', hue: 217 },

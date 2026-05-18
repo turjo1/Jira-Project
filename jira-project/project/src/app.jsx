@@ -6,8 +6,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 } /*EDITMODE-END*/;
 
 function App() {
-  const [data, setData] = useStateApp(window.JIRA_DATA);
-  const [loading, setLoading] = useStateApp(false);
+  const [data, setData] = useStateApp(null);
+  const [loading, setLoading] = useStateApp(true);
   const [dataError, setDataError] = useStateApp(null);
   const [view, setView] = useStateApp('dashboard');
   const [drilldown, setDrilldown] = useStateApp(null); // user
@@ -52,12 +52,13 @@ function App() {
       if (res.ok) {
         setData(await res.json());
         setDataError(null);
-      } else if (res.status !== 404) {
-        setDataError('Failed to load Jira data');
+      } else if (res.status === 404) {
+        setDataError('not_configured');
+      } else {
+        setDataError('fetch_failed');
       }
-      // 404 = not configured yet, stay on mock data silently
     } catch (e) {
-      // Backend offline — stay on mock data silently
+      setDataError('offline');
     }
     setLoading(false);
   }
@@ -82,6 +83,44 @@ function App() {
     board: { title: 'Workflow board', sub: 'Figma-style canvas — every developer is a floating frame' },
     table: { title: 'All tickets', sub: 'Sortable, filterable view with configurable columns' }
   };
+
+  if (data === null) {
+    const msg = loading ? 'Loading…'
+      : dataError === 'not_configured' ? 'Jira not connected. Open Settings and save your credentials.'
+      : dataError === 'offline' ? 'Backend offline. Start the server and refresh.'
+      : 'Failed to load data. Check the backend logs.';
+    return (
+      <div className="app">
+        <header className="nav">
+          <div className="nav__brand"><span className="brandmark">WP</span><span>Workpulse</span></div>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-primary" onClick={() => { setSettingsOpen(true); }}>
+            <Icon.Gear /> Settings
+          </button>
+        </header>
+        <main className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+          <div style={{ textAlign: 'center', color: 'var(--text-2)' }}>
+            {loading && <div className="sync-dot" style={{ display: 'inline-block', marginBottom: 12 }} />}
+            <p style={{ fontSize: 15 }}>{msg}</p>
+            {!loading && <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={fetchData}>Retry</button>}
+          </div>
+        </main>
+        {settingsOpen && <SettingsModal
+          onClose={() => setSettingsOpen(false)}
+          onSaveJira={async (creds) => {
+            try {
+              const res = await fetch('http://localhost:8000/api/jira/settings', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(creds)
+              });
+              if (res.ok) { setSettingsOpen(false); fetchData(); }
+              else alert('Failed to save Jira credentials');
+            } catch (e) { alert('Error: ' + e.message); }
+          }}
+          aiKeys={aiKeys} setAiKeys={setAiKeys}
+          activeModelId={activeModelId} setActiveModelId={setActiveModelId} />}
+      </div>
+    );
+  }
 
   return (
     <div className="app">
