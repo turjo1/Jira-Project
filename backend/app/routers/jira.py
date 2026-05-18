@@ -91,8 +91,8 @@ def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
         return None
 
 
-async def _fetch_project_keys(domain: str, headers: Dict[str, str]) -> List[str]:
-    """Return all accessible project keys."""
+async def _fetch_projects(domain: str, headers: Dict[str, str]) -> List[Dict[str, str]]:
+    """Return list of {key, name} for all accessible projects."""
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
             f"https://{domain}/rest/api/3/project/search",
@@ -100,17 +100,18 @@ async def _fetch_project_keys(domain: str, headers: Dict[str, str]) -> List[str]
             params={"maxResults": 50},
         )
         resp.raise_for_status()
-        return [p["key"] for p in resp.json().get("values", [])]
+        return [{"key": p["key"], "name": p["name"]} for p in resp.json().get("values", [])]
 
 
-async def _fetch_all_issues(domain: str, email: str, api_token: str) -> List[dict]:
-    """Fetch all Jira issues using pagination across all accessible projects."""
+async def _fetch_all_issues(domain: str, email: str, api_token: str) -> tuple:
+    """Fetch all Jira issues. Returns (issues, projects) where projects is [{key, name}]."""
     headers = _basic_auth_headers(email, api_token)
 
-    project_keys = await _fetch_project_keys(domain, headers)
-    if not project_keys:
-        return []
+    projects = await _fetch_projects(domain, headers)
+    if not projects:
+        return [], []
 
+    project_keys = [p["key"] for p in projects]
     # Prefer DELTA if present, otherwise use all accessible projects
     jql = "project = DELTA ORDER BY created DESC" if "DELTA" in project_keys else f"project IN ({','.join(project_keys)}) ORDER BY created DESC"
     issues: List[dict] = []
@@ -145,7 +146,7 @@ async def _fetch_all_issues(domain: str, email: str, api_token: str) -> List[dic
             if not next_token:
                 break
 
-    return issues
+    return issues, projects
 
 
 @router.post("/settings", response_model=JiraSettingsResponse)
@@ -187,7 +188,7 @@ async def get_jira_data() -> Dict[str, Any]:
         domain = config["domain"]
         email = config["email"]
 
-        jira_issues = await _fetch_all_issues(domain, email, api_token)
+        jira_issues, jira_projects = await _fetch_all_issues(domain, email, api_token)
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=502, detail=f"Jira API error: {e.response.status_code}")
     except Exception as e:
@@ -319,8 +320,9 @@ async def get_jira_data() -> Dict[str, Any]:
 
     bottleneck = max(status_avg, key=status_avg.get) if any(status_avg.values()) else "in_progress"
 
-    # 8-week trends (simplified: same value repeated — real impl would bucket by week)
-    avg_cycle = round(sum(t["cycleTimeDays"] or 0 for t in tickets) / len(tickets), 2) if tickets else 0
+    # Cycle time: average only resolved tickets (those with a cycleTimeDays value)
+    resolved_cycles = [t["cycleTimeDays"] for t in tickets if t["cycleTimeDays"] is not None]
+    avg_cycle = round(sum(resolved_cycles) / len(resolved_cycles), 2) if resolved_cycles else 0
     open_count = sum(1 for t in tickets if t["status"] != "done")
     done_count = len(tickets) - open_count
     total_bounces = sum(t["bounces"] for t in tickets)
@@ -347,8 +349,8 @@ async def get_jira_data() -> Dict[str, Any]:
         },
         "statuses": ["todo", "in_progress", "qa", "done"],
         "project": {
-            "key": domain.split(".")[0].upper(),
-            "name": config.get("project_name", domain.split(".")[0].capitalize()),
+            "key": jira_projects[0]["key"] if jira_projects else domain.split(".")[0].upper(),
+            "name": jira_projects[0]["name"] if jira_projects else domain.split(".")[0].capitalize(),
             "sprint": config.get("sprint", ""),
         },
     }
