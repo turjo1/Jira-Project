@@ -91,35 +91,58 @@ def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
         return None
 
 
-async def _fetch_all_issues(domain: str, email: str, api_token: str) -> List[dict]:
-    """Fetch all Jira issues using pagination."""
-    headers = _basic_auth_headers(email, api_token)
-    issues: List[dict] = []
-    start = 0
-    page_size = 100
+async def _fetch_project_keys(domain: str, headers: Dict[str, str]) -> List[str]:
+    """Return all accessible project keys."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            f"https://{domain}/rest/api/3/project/search",
+            headers=headers,
+            params={"maxResults": 50},
+        )
+        resp.raise_for_status()
+        return [p["key"] for p in resp.json().get("values", [])]
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+
+async def _fetch_all_issues(domain: str, email: str, api_token: str) -> List[dict]:
+    """Fetch all Jira issues using pagination across all accessible projects."""
+    headers = _basic_auth_headers(email, api_token)
+
+    project_keys = await _fetch_project_keys(domain, headers)
+    if not project_keys:
+        return []
+
+    # Prefer DELTA if present, otherwise use all accessible projects
+    jql = "project = DELTA ORDER BY created DESC" if "DELTA" in project_keys else f"project IN ({','.join(project_keys)}) ORDER BY created DESC"
+    issues: List[dict] = []
+    next_token: Optional[str] = None
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
         while True:
-            resp = await client.get(
-                f"https://{domain}/rest/api/3/search",
-                headers=headers,
-                params={
-                    "jql": "ORDER BY created DESC",
-                    "startAt": start,
-                    "maxResults": page_size,
-                    "expand": "changelog",
-                    "fields": (
-                        "summary,status,assignee,reporter,created,resolutiondate,"
-                        "priority,labels,customfield_10016,issuetype"
-                    ),
-                },
+            body: Dict[str, Any] = {
+                "jql": jql,
+                "maxResults": 100,
+                "fields": [
+                    "summary", "status", "assignee", "reporter", "created",
+                    "resolutiondate", "priority", "labels", "customfield_10016", "issuetype"
+                ],
+            }
+            if next_token:
+                body["nextPageToken"] = next_token
+
+            resp = await client.post(
+                f"https://{domain}/rest/api/3/search/jql",
+                headers={**headers, "Content-Type": "application/json"},
+                json=body,
             )
             resp.raise_for_status()
             data = resp.json()
             batch = data.get("issues", [])
             issues.extend(batch)
-            start += len(batch)
-            if start >= data.get("total", 0) or not batch:
+
+            if data.get("isLast", True) or not batch:
+                break
+            next_token = data.get("nextPageToken")
+            if not next_token:
                 break
 
     return issues
